@@ -31,21 +31,20 @@ namespace WebAdvert.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> Signup(SignupModel model)
         {
-            if (ModelState.IsValid)
-            {
-                var user = pool.GetUser(model.Email);
-                if (user.Status != null)
-                {
-                    ModelState.AddModelError("UserExists", "User with this email already exists.");
-                    return View(model);
-                }
+            if (!ModelState.IsValid) return View(model);
 
-                user.Attributes.Add(CognitoAttribute.Name.AttributeName, model.Email);
-                var createdUser = await _userManager.CreateAsync(user, model.Password);
-                if (createdUser.Succeeded)
-                {
-                    return RedirectToAction("Confirm");
-                }
+            var user = pool.GetUser(model.Email);
+            if (user.Status != null)
+            {
+                ModelState.AddModelError("UserExists", "User with this email already exists.");
+                return View(model);
+            }
+
+            user.Attributes.Add(CognitoAttribute.Name.AttributeName, model.Email);
+            var createdUser = await _userManager.CreateAsync(user, model.Password);
+            if (createdUser.Succeeded)
+            {
+                return RedirectToAction("Confirm");
             }
             return View();
         }
@@ -75,14 +74,44 @@ namespace WebAdvert.Web.Controllers
             }
             else
             {
-                foreach(var err in result.Errors)
-                {
-                    ModelState.AddModelError(err.Code, err.Description);
-                }
+                AddErrorsToModelState(result);
                 return View(model);
             }
         }
 
+        private void AddErrorsToModelState(IdentityResult result)
+        {
+            foreach (var err in result.Errors)
+            {
+                ModelState.AddModelError(err.Code, err.Description);
+            }
+        }
 
+        public IActionResult Login()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Login(LoginModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            if (user == null)
+            {
+                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+            }
+            var result = await signInManager.PasswordSignInAsync(user, model.Password, model.RemembeMe, false);
+            if (result.Succeeded)
+            {
+                return RedirectToAction("Index", "Home");
+            }
+            else
+            {
+                ModelState.AddModelError("LoginError", "Email or password is not valid.");
+            }
+            return View(model);
+        }
     }
 }

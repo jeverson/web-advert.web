@@ -40,6 +40,11 @@ namespace WebAdvert.Web
                     RequireUppercase = false
                 };
             });
+
+            services.ConfigureApplicationCookie(o => {
+                o.LoginPath = "/Accounts/Login";
+            });
+
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }
 

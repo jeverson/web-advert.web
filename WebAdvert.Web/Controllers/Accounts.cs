@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using WebAdvert.Web.Models.Accounts;
+using System;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -11,15 +12,15 @@ namespace WebAdvert.Web.Controllers
 {
     public class Accounts : Controller
     {
-        private readonly SignInManager<CognitoUser> signInManager;
+        private readonly SignInManager<CognitoUser> _signInManager;
         private readonly UserManager<CognitoUser> _userManager;
-        private readonly CognitoUserPool pool;
+        private readonly CognitoUserPool _pool;
 
         public Accounts(SignInManager<CognitoUser> signInManager, UserManager<CognitoUser> userManager, CognitoUserPool pool)
         {
-            this.signInManager = signInManager;
-            this._userManager = userManager;
-            this.pool = pool;
+            _signInManager = signInManager;
+            _userManager = userManager;
+            _pool = pool;
         }
 
         public IActionResult Signup()
@@ -33,7 +34,7 @@ namespace WebAdvert.Web.Controllers
         {
             if (!ModelState.IsValid) return View(model);
 
-            var user = pool.GetUser(model.Email);
+            var user = _pool.GetUser(model.Email);
             if (user.Status != null)
             {
                 ModelState.AddModelError("UserExists", "User with this email already exists.");
@@ -102,7 +103,7 @@ namespace WebAdvert.Web.Controllers
             {
                 ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
             }
-            var result = await signInManager.PasswordSignInAsync(user, model.Password, model.RemembeMe, false);
+            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RemembeMe, false);
             if (result.Succeeded)
             {
                 return RedirectToAction("Index", "Home");
@@ -112,6 +113,59 @@ namespace WebAdvert.Web.Controllers
                 ModelState.AddModelError("LoginError", "Email or password is not valid.");
             }
             return View(model);
+        }
+
+        public IActionResult ForgotPassword()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+
+            var user = await _userManager.FindByNameAsync(model.Email);
+            if (user == null)
+            {
+                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+                return View(model);
+            };
+
+            await user.ForgotPasswordAsync();
+
+            return RedirectToAction("ConfirmForgotPassword");
+
+        }
+
+        public IActionResult ConfirmForgotPassword()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async  Task<IActionResult> ConfirmForgotPassword(ConfirmForgotPasswordModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+
+            var user = await _userManager.FindByNameAsync(model.Email);
+            if (user == null)
+            {
+                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+                return View(model);
+            };
+
+            try
+            {
+                await user.ConfirmForgotPasswordAsync(model.Code, model.Password);
+            }
+            catch (Exception e)
+            {
+                ModelState.AddModelError("Failed", $"A failure has ocurred. Message: {e.Message}");
+                return View(model);
+            }
+
+            return RedirectToAction("Login");
         }
     }
 }

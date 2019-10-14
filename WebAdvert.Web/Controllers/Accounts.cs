@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using WebAdvert.Web.Models.Accounts;
 using System;
+using Amazon.CognitoIdentityProvider;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -23,11 +24,7 @@ namespace WebAdvert.Web.Controllers
             _pool = pool;
         }
 
-        public IActionResult Signup()
-        {
-            var model = new SignupModel();
-            return View(model);
-        }
+        public IActionResult Signup() => View();
 
         [HttpPost]
         public async Task<IActionResult> Signup(SignupModel model)
@@ -51,10 +48,7 @@ namespace WebAdvert.Web.Controllers
         }
 
 
-        public IActionResult Confirm()
-        {            
-            return View();
-        }
+        public IActionResult Confirm() => View();
 
         [HttpPost]
         public async Task<IActionResult> Confirm(ConfirmModel model)
@@ -64,18 +58,18 @@ namespace WebAdvert.Web.Controllers
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
             {
-                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+                AddUserNotFoundModelState();
                 return View(model);
             }
 
-            var result = await (_userManager as CognitoUserManager<CognitoUser>).ConfirmSignUpAsync(user, model.Code, true);
-            if (result.Succeeded)
+            try
             {
+                await user.ConfirmSignUpAsync(model.Code, true);
                 return RedirectToAction("Index", "Home");
             }
-            else
+            catch (Exception e)
             {
-                AddErrorsToModelState(result);
+                ModelState.AddModelError("SignUpError", $"Failed to Confirm SignUp. Error: {e.Message}");
                 return View(model);
             }
         }
@@ -88,10 +82,7 @@ namespace WebAdvert.Web.Controllers
             }
         }
 
-        public IActionResult Login()
-        {
-            return View();
-        }
+        public IActionResult Login() => View();
 
         [HttpPost]
         public async Task<IActionResult> Login(LoginModel model)
@@ -101,24 +92,25 @@ namespace WebAdvert.Web.Controllers
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
             {
-                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+                AddUserNotFoundModelState();
+                return View(model);
             }
-            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RemembeMe, false);
-            if (result.Succeeded)
-            {
+
+            var authResponse = await user.StartWithSrpAuthAsync(new InitiateSrpAuthRequest { Password = model.Password });
+
+            if (authResponse.AuthenticationResult != null)
                 return RedirectToAction("Index", "Home");
-            }
+            else if (authResponse.ChallengeName == ChallengeNameType.SMS_MFA)
+                return RedirectToAction("TwoFactorAuth", new TwoFactorAuthModel { Email = model.Email });
             else
-            {
                 ModelState.AddModelError("LoginError", "Email or password is not valid.");
-            }
+
             return View(model);
         }
 
-        public IActionResult ForgotPassword()
-        {
-            return View();
-        }
+        private void AddUserNotFoundModelState() => ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+
+        public IActionResult ForgotPassword() => View();
 
         [HttpPost]
         public async Task<IActionResult> ForgotPassword(ForgotPasswordModel model)
@@ -128,7 +120,7 @@ namespace WebAdvert.Web.Controllers
             var user = await _userManager.FindByNameAsync(model.Email);
             if (user == null)
             {
-                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+                AddUserNotFoundModelState();
                 return View(model);
             };
 
@@ -138,10 +130,7 @@ namespace WebAdvert.Web.Controllers
 
         }
 
-        public IActionResult ConfirmForgotPassword()
-        {
-            return View();
-        }
+        public IActionResult ConfirmForgotPassword() => View();
 
         [HttpPost]
         public async  Task<IActionResult> ConfirmForgotPassword(ConfirmForgotPasswordModel model)
@@ -151,7 +140,7 @@ namespace WebAdvert.Web.Controllers
             var user = await _userManager.FindByNameAsync(model.Email);
             if (user == null)
             {
-                ModelState.AddModelError("NotFound", "A user with the given email address was not found.");
+                AddUserNotFoundModelState();
                 return View(model);
             };
 
@@ -165,7 +154,38 @@ namespace WebAdvert.Web.Controllers
                 return View(model);
             }
 
-            return RedirectToAction("Login");
+            var loginModel = new LoginModel { Email = model.Email };
+            return RedirectToAction("Login", loginModel);
+        }
+
+        public IActionResult TwoFactorAuth() => View();
+
+        public async Task<IActionResult> TwoFactorAuth(TwoFactorAuthModel model)
+        {
+            if (!ModelState.IsValid) return View(model);
+            
+            var user = await _userManager.FindByNameAsync(model.Email);
+            if (user == null)
+            {
+                AddUserNotFoundModelState();
+                return View(model);
+            }
+
+            try
+            {
+                await user.RespondToSmsMfaAuthAsync(
+                    new RespondToSmsMfaRequest {
+                        SessionID = user.SessionTokens.IdToken,
+                        MfaCode = model.Code
+                    });
+            }
+            catch (Exception e)
+            {
+                ModelState.AddModelError("MFAFailed", $"Failed to validate the provided code. Err: {e.Message}");
+                return View(model);
+            }
+
+            return RedirectToAction("Index", "Home");
         }
     }
 }

@@ -28,43 +28,67 @@ namespace WebAdvert.Web.Controllers
 
             if (!ModelState.IsValid) return View(model);
 
-            var createAdvertModel = _mapper.Map<CreateAdvertModel>(model);
-            var response = await _advertClientApi.Create(createAdvertModel);
-            var id = response.Id;
-
             if (imageFile == null) return View(model);
 
-            var fileName = !string.IsNullOrEmpty(imageFile.FileName) ? Path.GetFileName(imageFile.FileName) : id;
-            var filePath = $"{id}/{fileName}";
+            string id = await CreateAdvert(model);
+            string filePath = GetFilePath(imageFile, id);
 
             try
             {
-                using (var readStream = imageFile.OpenReadStream())
-                {
-                    var result = await _fileUploader.UploadFileAsync(filePath, readStream);
-                    if (!result)
-                        throw new Exception("Could not upload the image to file repository. Please see the logs for more details.");
-                }
-
-                var confirmModel = new ConfirmAdvertRequest { Id = id, Status = AdvertApi.Models.AdvertStatus.Active };
-                var confirmed = await _advertClientApi.Confirm(confirmModel);
-                if (!confirmed)
-                {
-                    throw new Exception($"Cannot confirm advert of id = {id}");
-                }
+                await UploadImage(imageFile, filePath);
+                await ConfirmAdvert(id);
 
                 return RedirectToAction("Index", "Home");
-
             }
             catch (Exception e)
             {
-                var cancelModel = new ConfirmAdvertRequest { Id = id, Status = AdvertApi.Models.AdvertStatus.Pending };
-                await _advertClientApi.Confirm(cancelModel);
+                await CancelAdvertCreation(id);
 
                 // Missing loggers for now
                 Console.WriteLine(e);
             }
             return View(model);
+        }
+
+        private async Task CancelAdvertCreation(string id)
+        {
+            var cancelModel = new ConfirmAdvertRequest { Id = id, Status = AdvertApi.Models.AdvertStatus.Pending };
+            await _advertClientApi.Confirm(cancelModel);
+        }
+
+        private async Task ConfirmAdvert(string id)
+        {
+            var confirmModel = new ConfirmAdvertRequest { Id = id, Status = AdvertApi.Models.AdvertStatus.Active };
+            var confirmed = await _advertClientApi.Confirm(confirmModel);
+            if (!confirmed)
+            {
+                throw new Exception($"Cannot confirm advert of id = {id}");
+            }
+        }
+
+        private async Task UploadImage(IFormFile imageFile, string filePath)
+        {
+            using (var readStream = imageFile.OpenReadStream())
+            {
+                var result = await _fileUploader.UploadFileAsync(filePath, readStream);
+                if (!result)
+                    throw new Exception("Could not upload the image to file repository. Please see the logs for more details.");
+            }
+        }
+
+        private static string GetFilePath(IFormFile imageFile, string id)
+        {
+            var fileName = !string.IsNullOrEmpty(imageFile.FileName) ? Path.GetFileName(imageFile.FileName) : id;
+            var filePath = $"{id}/{fileName}";
+            return filePath;
+        }
+
+        private async Task<string> CreateAdvert(CreateAdvertViewModel model)
+        {
+            var createAdvertModel = _mapper.Map<CreateAdvertModel>(model);
+            var response = await _advertClientApi.Create(createAdvertModel);
+            var id = response.Id;
+            return id;
         }
     }
 }

@@ -1,17 +1,13 @@
 ﻿
-@{
-    ViewData["Title"] = "TwoFactorAuth";
-}
-
 @model WebAdvert.Web.Models.Accounts.TwoFactorAuthModel
 
 <div class="row">
     <div class="col-md-6">
         <h4>Please confirm your email address and the code you just received.</h4>
         <hr />
-
+        
         <form asp-action="TwoFactorAuth" asp-controller="Accounts" method="post">
-            <span asp-validation-for="All" class="text-danger"></span>
+            <div asp-validation-summary="All" class="text-danger"></div>
 
             <div class="form-group">
                 <label asp-for="Email"></label>
@@ -27,6 +23,7 @@
 
             <button type="submit" class="btn-primary">Submit</button>
         </form>
+
+
     </div>
 </div>
-

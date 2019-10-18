@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
+using Amazon.S3;
 using AutoMapper;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -30,6 +31,8 @@ namespace WebAdvert.Web
         {
             services.AddControllers();
             services.AddAutoMapper(typeof(Startup));
+
+            services.AddAWSService<IAmazonS3>(Configuration.GetAWSOptions("AWS"));
 
             services.Configure<CookiePolicyOptions>(options =>
             {
@@ -94,10 +97,17 @@ namespace WebAdvert.Web
 
             app.UseStaticFiles();
             app.UseCookiePolicy();
+
             app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.UseRouting();
 
             app.UseEndpoints(endpoints => {
-                endpoints.MapControllers();
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapRazorPages();
             });
         }
     }

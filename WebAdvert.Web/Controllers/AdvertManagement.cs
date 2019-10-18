@@ -23,6 +23,9 @@ namespace WebAdvert.Web.Controllers
             _mapper = mapper;
         }
 
+        public IActionResult Create() => View();
+
+        [HttpPost]
         public async Task<IActionResult> Create(CreateAdvertViewModel model, IFormFile imageFile)
         {
 

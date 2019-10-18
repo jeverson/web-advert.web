@@ -11,10 +11,12 @@ namespace WebAdvert.Web.Services
     public class S3FileUploader : IFileUploader
     {
         private readonly IConfiguration _configuration;
+        private readonly IAmazonS3 _amazonS3;
 
-        public S3FileUploader(IConfiguration configuration)
+        public S3FileUploader(IConfiguration configuration, IAmazonS3 amazonS3)
         {
             _configuration = configuration;
+            _amazonS3 = amazonS3;
         }
 
         public async Task<bool> UploadFileAsync(string fileName, Stream storageStream)
@@ -35,10 +37,8 @@ namespace WebAdvert.Web.Services
                 Key = fileName
             };
 
-            using (var client = new AmazonS3Client()) {
-                var response = await client.PutObjectAsync(request).ConfigureAwait(false);
-                return response.HttpStatusCode == HttpStatusCode.OK;
-            }
+            var response = await _amazonS3.PutObjectAsync(request).ConfigureAwait(false);
+            return response.HttpStatusCode == HttpStatusCode.OK;
 
         }
     }
